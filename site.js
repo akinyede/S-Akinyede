@@ -64,7 +64,20 @@
   }));
   document.querySelector('#reader-close').addEventListener('click', closeArticle);
   reader.addEventListener('cancel', event => { event.preventDefault(); closeArticle(); });
-  reader.addEventListener('click', event => { if (event.target !== reader) return; const r = reader.getBoundingClientRect(); if (event.clientX < r.left || event.clientX > r.right || event.clientY < r.top || event.clientY > r.bottom) closeArticle(); });
+  reader.addEventListener('click', event => { if (event.target !== reader) return; const r = reader.getBoundingClientRect(); if (event.clientX < r.left || event.clientY < r.top || event.clientX > r.right || event.clientY > r.bottom) closeArticle(); });
   window.addEventListener('popstate', () => { const id = articleId(); if (validArticle(id)) openArticle(id); else if (activeArticle) { if (reader.open) reader.close(); document.body.classList.remove('locked'); activeArticle = null; } });
   if (validArticle(articleId())) openArticle(articleId());
+})();
+
+// Optional, versioned motion and reasoning playground; the base portfolio stands alone.
+(() => {
+  const base = document.currentScript.src;
+  const style = document.createElement('link'); style.rel = 'stylesheet';
+  style.href = new URL('motion.css?v=20260927-1', base).href;
+  style.addEventListener('load', () => {
+    const script = document.createElement('script');
+    script.src = new URL('motion.js?v=20260927-1', base).href;
+    document.head.append(script);
+  }, { once: true });
+  document.head.append(style);
 })();
