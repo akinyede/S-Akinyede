@@ -1,7 +1,7 @@
-/* Original reasoning puzzles. No IQ estimates, ranking, accounts, or score transmission. */
+/* Original reasoning puzzles. Game scores are not IQ estimates. */
 'use strict';
 (() => {
-  const BANK = [
+const BANK = [
 {"id":"e-n1","level":"explorer","category":"Number patterns","question":"What comes next?","options":["14","15","16","18"],"answer":"15","explanation":"Add 3 each time: 3, 6, 9, 12, 15.","hint":"Compare neighboring numbers.","tokens":["3","6","9","12","?"],"prompt":""},
 {"id":"e-n2","level":"explorer","category":"Number patterns","question":"What comes next?","options":["26","28","30","32"],"answer":"30","explanation":"The differences are 4, 6, 8, then 10. Adding 10 to 20 gives 30.","hint":"The gaps form a pattern of their own.","tokens":["2","6","12","20","?"],"prompt":""},
 {"id":"e-n3","level":"explorer","category":"Number patterns","question":"What comes next?","options":["10","12","14","16"],"answer":"16","explanation":"Each number is twice the one before it. Twice 8 is 16.","hint":"Try multiplication instead of addition.","tokens":["1","2","4","8","?"],"prompt":""},
@@ -29,127 +29,38 @@
 {"id":"h-l1","level":"architect","category":"Deduction","question":"Which box contains the prize?","options":["Box A","Box B","Box C","No arrangement works."],"answer":"Box C","explanation":"If the prize were in A, the A and C labels would be true. If it were in B, the B and C labels would be true. In C, only B is true. So C is the only location with exactly one true label.","hint":"Try each possible location and count the true labels.","tokens":[],"prompt":"One prize is in one of three boxes. Exactly one label is true.\nA: “The prize is in A.”\nB: “The prize is not in A.”\nC: “The prize is not in C.”"},
 {"id":"h-l2","level":"architect","category":"Deduction","question":"Which other sensor passes?","options":["P","Q","S","It cannot be determined."],"answer":"S","explanation":"If P and Q both passed, adding R would give at least three passes. So P and Q both fail. R and S must be the exactly two that pass.","hint":"Test the possibility that P and Q both pass.","tokens":[],"prompt":"Exactly two of P, Q, R, and S pass a check. P and Q have the same outcome. R passes."},
 {"id":"h-l3","level":"architect","category":"Deduction","question":"What is the smallest possible sum?","options":["64","73","82","91"],"answer":"64","explanation":"Put the two smallest digits, 2 and 3, in the tens positions. The remaining digits contribute 5 + 9 = 14. The sum is 20 + 30 + 14 = 64, as in 25 + 39.","hint":"The tens positions matter ten times as much as the units positions.","tokens":[],"prompt":"Use each digit 2, 3, 5, and 9 exactly once to make two two-digit numbers. Add those two numbers."}
-  ];
-  const $ = (s, node = document) => node.querySelector(s);
-  const $$ = (s, node = document) => [...node.querySelectorAll(s)];
-  const escape = text => String(text).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-  const accessible = token => ({ '↑': 'Up arrow', '→': 'Right arrow', '↓': 'Down arrow', '←': 'Left arrow', '◇': 'Outlined diamond', '●': 'Filled circle', '■': 'Filled square', '▲': 'Filled triangle', '?': 'Missing item' }[token] || token);
-  const levels = { explorer: ['Explorer', 'Warm up'], analyst: ['Analyst', 'Dig deeper'], architect: ['Architect', 'Connect rules'] };
-  const categories = ['Number patterns', 'Symbol patterns', 'Deduction'];
-  const storeKey = 'sa-signal-sense-v1';
-  function readRecords() {
-    try {
-      const saved = JSON.parse(localStorage.getItem(storeKey) || '{}');
-      return Object.fromEntries(Object.keys(levels).map(key => [key, Number.isInteger(saved?.[key]) && saved[key] >= 0 && saved[key] <= 600 ? saved[key] : 0]));
-    } catch { return { explorer: 0, analyst: 0, architect: 0 }; }
-  }
-  let records = readRecords();
-  const shuffle = array => { const out = [...array]; for (let i = out.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [out[i], out[j]] = [out[j], out[i]]; } return out; };
-  let level = 'explorer', deck = [], round = 0, score = 0, solved = 0, streak = 0, bestStreak = 0;
-  let selected = null, answered = false, hinted = false, history = [], previousIds = '';
-  const section = document.createElement('section'); section.id = 'play'; section.className = 'playground wrap'; section.setAttribute('aria-labelledby', 'play-title');
-  section.innerHTML = `<div class="play-layout"><div class="play-intro"><p class="eyebrow">The thinking playground</p><h2 id="play-title">Find the pattern.<br><span class="serif">Question the obvious.</span></h2><p>A small challenge for a curious mind. Spot a rule, follow the evidence, and see whether your first instinct holds up.</p><p class="game-premise">The same habit runs through my work: look beyond the surface, then explain why an answer makes sense.</p><div class="game-facts"><span>6 puzzles per round</span><span>3 difficulty levels</span><span>No timer</span></div><div class="game-privacy">Play without an account. Your best score stays in this browser. This is a reasoning game, not a validated IQ test.</div></div><div class="game-shell"><div class="game-top"><span class="game-brand"><span class="game-brand-icon" aria-hidden="true"></span>Signal Sense</span><span id="game-top-status">The reasoning challenge</span></div><div class="game-body" id="game-body" tabindex="-1"></div><div class="game-footnote"><span>Reasoning practice, not an IQ score.</span><span id="game-bottom-status">No clock. Think it through.</span></div></div></div>`;
-  $('#approach').before(section);
-  const body = $('#game-body');
-  const playLink = document.createElement('a'); playLink.href = '#play'; playLink.textContent = 'Play';
-  $('#navigation .nav-contact').before(playLink);
-  playLink.addEventListener('click', () => { $('#navigation').classList.remove('open'); $('.menu-toggle').setAttribute('aria-expanded', 'false'); $('.menu-toggle').textContent = 'Menu'; });
-  $('.hero-actions').insertAdjacentHTML('afterend', '<a class="play-invitation" href="#play"><span class="invitation-dot" aria-hidden="true"></span>Take the Signal Sense challenge <span aria-hidden="true">↗</span></a>');
-  function pulse() {
-    if (document.documentElement.dataset.motion === 'reduced' || !body.animate) return;
-    body.animate([{ opacity: .4, transform: 'translateY(5px)' }, { opacity: 1, transform: 'translateY(0)' }], { duration: 230, easing: 'ease-out' });
-  }
-  function focusQuestion() {
-    const heading = $('#game-question');
-    if (!heading) return;
-    heading.focus({ preventScroll: true });
-    const rect = heading.getBoundingClientRect();
-    if (rect.top < $('.site-header').offsetHeight + 16 || rect.top > innerHeight - 100) heading.scrollIntoView({ behavior: 'instant', block: 'start' });
-  }
-  function formatTokens(tokens, className = 'question-tokens') {
-    if (!tokens.length) return '';
-    return `<div class="${className}" role="group" aria-label="Pattern to solve">${tokens.map(token => `<span class="game-token ${token === '?' ? 'unknown' : ''} ${token.length > 2 ? 'long' : ''}" aria-label="${escape(accessible(token))}"><span aria-hidden="true">${escape(token)}</span></span>`).join('')}</div>`;
-  }
-  function intro(focus = false) {
-    $('#game-top-status').textContent = 'The reasoning challenge';
-    $('#game-bottom-status').textContent = 'No clock. Think it through.';
-    body.innerHTML = `<h3 id="game-question" tabindex="-1">Your next good question<br>starts here.</h3><p>Six puzzles in numbers, symbols, and deduction. Find the intended simple rule. Every answer comes with an explanation.</p>${formatTokens(['2', '6', '12', '20', '?'], 'game-example')}<fieldset class="level-selector"><legend>Choose your challenge</legend><div class="level-options">${Object.entries(levels).map(([key, words]) => `<label class="level-option"><input type="radio" name="difficulty" value="${key}" ${level === key ? 'checked' : ''}><span class="level-face">${words[0]}<small>${words[1]}</small></span></label>`).join('')}</div></fieldset><button type="button" id="game-start" class="game-primary game-start">Start the challenge <span aria-hidden="true">→</span></button><p class="game-result-note">100 points per correct answer. With a hint: 50. No speed bonus or time pressure. Skipped and incorrect answers score 0.</p><div class="game-round-meta"><span id="game-best">Best here: ${records[level]} / 600</span><button type="button" class="game-text-button" id="game-clear-records">Clear saved scores</button></div>`;
-    $$('input[name=difficulty]', body).forEach(input => input.addEventListener('change', () => { level = input.value; $('#game-best').textContent = `Best here: ${records[level]} / 600`; }));
-    $('#game-start').addEventListener('click', start);
-    $('#game-clear-records').addEventListener('click', () => { records = { explorer: 0, analyst: 0, architect: 0 }; try { localStorage.removeItem(storeKey); } catch { /* Optional storage. */ } $('#game-best').textContent = 'Saved scores cleared.'; });
-    if (focus) focusQuestion(); pulse();
-  }
-  function start() {
-    const sample = () => shuffle(categories.flatMap(category => shuffle(BANK.filter(q => q.level === level && q.category === category)).slice(0, 2)));
-    deck = sample();
-    if (deck.map(q => q.id).join(',') === previousIds) deck.reverse();
-    previousIds = deck.map(q => q.id).join(',');
-    round = score = solved = streak = bestStreak = 0; history = [];
-    renderQuestion();
-  }
-  function renderQuestion() {
-    selected = null; answered = false; hinted = false;
-    const q = deck[round], options = shuffle(q.options);
-    $('#game-top-status').textContent = `${levels[level][0]} · ${score} points`;
-    $('#game-bottom-status').textContent = 'Take your time. There is no countdown.';
-    const long = options.some(option => option.length > 26);
-    body.innerHTML = `<div class="game-stage-label">Puzzle ${round + 1} of 6 · ${q.category}</div><div class="game-progress" aria-hidden="true">${Array.from({ length: 6 }, (_, i) => `<span class="${i < round ? 'done' : i === round ? 'current' : ''}"></span>`).join('')}</div><h3 class="game-question" id="game-question" tabindex="-1">${escape(q.question)}</h3>${q.prompt ? `<div class="game-prompt" style="white-space:pre-line">${escape(q.prompt)}</div>` : ''}${formatTokens(q.tokens)}<fieldset class="game-answers ${long ? 'long-answers' : ''}" id="game-answers"><legend class="sr-only">Choose one answer</legend>${options.map((option, i) => `<label class="game-answer"><input type="radio" name="answer" value="${i}" aria-label="${escape(accessible(option))}"><span>${escape(option)}</span><span class="answer-mark" aria-hidden="true"></span></label>`).join('')}</fieldset><div id="game-hint" class="game-hint" hidden></div><div id="game-feedback" aria-live="polite" aria-atomic="true"></div><div class="game-actions" id="game-actions"><button class="game-primary" type="button" id="game-check" disabled>Check answer <span aria-hidden="true">→</span></button><button class="game-text-button" id="game-hint-button" type="button">Get a hint</button><button class="game-text-button" id="game-skip" type="button">Skip</button></div><div class="game-round-meta"><span id="game-round-score">${score} points · ${solved} solved</span><span>Best streak: ${bestStreak}</span></div>`;
-    $$('input[name=answer]', body).forEach(input => input.addEventListener('change', () => { if (answered) return; selected = options[Number(input.value)]; $('#game-check').disabled = false; }));
-    $('#game-check').addEventListener('click', () => { if (selected !== null && !answered) answer(false, options); });
-    $('#game-skip').addEventListener('click', () => { if (!answered) answer(true, options); });
-    $('#game-hint-button').addEventListener('click', () => { if (answered || hinted) return; hinted = true; const hint = $('#game-hint'); hint.textContent = q.hint + ' A correct answer is now worth 50 points.'; hint.hidden = false; hint.setAttribute('role', 'status'); $('#game-hint-button').disabled = true; $('#game-hint-button').textContent = 'Hint used'; });
-    focusQuestion(); pulse();
-  }
-  function answer(skipped, options) {
-    if (answered) return; answered = true;
-    const q = deck[round]; const correct = !skipped && selected === q.answer;
-    const earned = correct ? (hinted ? 50 : 100) : 0;
-    score += earned; if (correct) { solved++; streak++; bestStreak = Math.max(streak, bestStreak); } else streak = 0;
-    history.push({ q, selected: skipped ? null : selected, correct, hinted, skipped, earned });
-    $$('input[name=answer]', body).forEach(input => {
-      input.disabled = true; const value = options[Number(input.value)]; const label = input.closest('label');
-      if (value === q.answer) { label.classList.add('answer-correct'); $('.answer-mark', label).textContent = '✓ Correct'; }
-      else if (value === selected && !skipped) { label.classList.add('answer-wrong'); $('.answer-mark', label).textContent = '× Your pick'; }
-    });
-    const feedback = $('#game-feedback'); feedback.className = 'game-feedback' + (correct ? '' : ' incorrect');
-    feedback.innerHTML = `<strong>${correct ? `Rule found. +${earned} points` : skipped ? 'Skipped. Here is the rule.' : 'Not this time. Here is the rule.'}</strong><p><strong>Answer: ${escape(accessible(q.answer))}.</strong> ${escape(q.explanation)}</p>`;
-    $('#game-actions').innerHTML = `<button class="game-primary" type="button" id="game-next">${round === 5 ? 'See my results' : 'Next puzzle'} <span aria-hidden="true">→</span></button>`;
-    $('#game-next').addEventListener('click', () => { if (round === 5) results(); else { round++; renderQuestion(); } });
-    $('#game-round-score').textContent = `${score} points · ${solved} solved`;
-    $('#game-top-status').textContent = `${levels[level][0]} · ${score} points`;
-    $('#game-next').focus({ preventScroll: true });
-  }
-  function results() {
-    const oldBest = records[level]; records[level] = Math.max(records[level], score);
-    let stored = false; try { localStorage.setItem(storeKey, JSON.stringify(records)); stored = true; } catch { /* Private/restricted browser: game remains fully playable. */ }
-    const title = solved === 6 ? 'Every rule found.' : solved >= 4 ? 'A good round of thinking.' : 'The next insight starts here.';
-    $('#game-top-status').textContent = 'Round complete'; $('#game-bottom-status').textContent = 'Curiosity beats a label.';
-    body.innerHTML = `<div class="game-stage-label">${levels[level][0]} · Round complete</div><h3 id="game-question" class="game-question" tabindex="-1" style="margin-top:14px">${title}</h3><div class="score-layout"><div class="score-dial" style="--score:${solved / 6 * 100}" aria-label="${solved} of 6 puzzles solved"><strong>${solved}<small> / 6</small></strong></div><div class="score-summary"><strong>${score} <span class="mono">/ 600 points</span></strong><p>Best streak: ${bestStreak} · Hints used: ${history.filter(h => h.hinted).length}</p><p>${score > oldBest ? 'A new best for this level.' : `Best on this level: ${records[level]} / 600.`}</p></div></div><p>These points describe this round, not your intelligence. Review the explanations, then try another set of puzzles.</p><div class="game-actions"><button class="game-primary" type="button" id="game-replay">Play another round <span aria-hidden="true">↻</span></button><button class="game-text-button" type="button" id="game-levels">Change level</button><button class="game-text-button" type="button" id="game-copy">Copy my result</button></div><div id="copy-status" class="copy-status" role="status"></div><details class="game-review"><summary>Review all six answers</summary>${history.map((item, i) => `<div class="review-item"><strong>${i + 1}. ${escape(item.q.question)} ${item.correct ? '✓' : '·'}</strong><p>${item.q.tokens.length ? escape(item.q.tokens.map(accessible).join(' · ')) : escape(item.q.prompt)}</p><p>Your answer: ${item.skipped ? 'Skipped' : escape(accessible(item.selected))}. Correct answer: ${escape(accessible(item.q.answer))}. ${item.earned} points.</p><p>${escape(item.q.explanation)}</p></div>`).join('')}</details><p class="game-result-note">${stored ? 'Best scores are stored only in this browser. Clear them from the challenge start screen.' : 'Browser storage is unavailable. Your score is shown here but will not persist after this page closes.'} This is a reasoning game, not a validated IQ assessment or percentile ranking.</p>`;
-    $('#game-replay').addEventListener('click', start); $('#game-levels').addEventListener('click', () => intro(true));
-    $('#game-copy').addEventListener('click', async () => {
-      const text = `I solved ${solved}/6 puzzles in Signal Sense (${levels[level][0]}) and scored ${score}/600. A reasoning game, not an IQ test. Try it: https://akinyede.github.io/S-Akinyede/#play`;
-      const status = $('#copy-status');
-      try { if (!navigator.clipboard?.writeText) throw new Error('Clipboard unavailable'); await navigator.clipboard.writeText(text); status.textContent = 'Result copied. Share it wherever you like.'; }
-      catch { status.textContent = 'Select and copy your result below:'; const field = document.createElement('textarea'); field.readOnly = true; field.className = 'score-fallback'; field.setAttribute('aria-label', 'Result to copy'); field.value = text; status.append(field); field.focus(); field.select(); }
-    });
-    focusQuestion(); pulse();
-  }
-  intro();
-  // Navigation tracks the reading position; it does not move the page for the visitor.
-  const navigationLinks = $$('#navigation a[href^="#"]');
-  const sections = navigationLinks.map(link => $(link.getAttribute('href'))).filter(Boolean);
-  let scheduled = false;
-  function updateNavigation() {
-    scheduled = false; const edge = $('.site-header').offsetHeight + 125;
-    const candidates = sections.filter(node => node.getBoundingClientRect().top <= edge);
-    const current = candidates.sort((a, b) => b.getBoundingClientRect().top - a.getBoundingClientRect().top)[0];
-    navigationLinks.forEach(link => { if (current && link.hash === '#' + current.id) link.setAttribute('aria-current', 'location'); else link.removeAttribute('aria-current'); });
-  }
-  addEventListener('scroll', () => { if (!scheduled) { scheduled = true; requestAnimationFrame(updateNavigation); } }, { passive: true });
-  updateNavigation();
-  const colophon = $('#article-site');
-  if (colophon) { const paragraph = document.createElement('p'); paragraph.textContent = 'Signal Sense is an original browser-based reasoning game with 27 puzzles, three difficulty levels, and six puzzles per round. Its points are game scores, not IQ estimates. Best scores and the optional reduced-motion setting are stored locally in this browser. The site sends no game scores to a server.'; colophon.content.append(paragraph); }
-  // Direct links to #play work even though this section is progressively enhanced.
-  if (location.hash === '#play') requestAnimationFrame(() => section.scrollIntoView({ behavior: 'instant', block: 'start' }));
-  document.documentElement.dataset.interactive = 'ready';
+];
+const $=(s,node=document)=>node.querySelector(s), $$=(s,node=document)=>[...node.querySelectorAll(s)];
+const escape=text=>String(text).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const accessible=token=>({'↑':'Up arrow','→':'Right arrow','↓':'Down arrow','←':'Left arrow','◇':'Outlined diamond','●':'Filled circle','■':'Filled square','▲':'Filled triangle','?':'Missing item'}[token]||token);
+const levels={explorer:['Explorer','Warm up'],analyst:['Analyst','Dig deeper'],architect:['Architect','Connect rules']};
+const categories=['Number patterns','Symbol patterns','Deduction'],storeKey='sa-signal-sense-v1';
+function readRecords(){try{const saved=JSON.parse(localStorage.getItem(storeKey)||'{}');return Object.fromEntries(Object.keys(levels).map(key=>[key,Number.isInteger(saved?.[key])&&saved[key]>=0&&saved[key]<=600?saved[key]:0]));}catch{return {explorer:0,analyst:0,architect:0};}}
+let records=readRecords();
+const shuffle=array=>{const out=[...array];for(let i=out.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[out[i],out[j]]=[out[j],out[i]];}return out;};
+let level='explorer',deck=[],round=0,score=0,solved=0,streak=0,bestStreak=0,selected=null,answered=false,hinted=false,history=[],previousIds='';
+const section=document.createElement('section');section.id='play';section.className='playground wrap';section.setAttribute('aria-labelledby','play-title');
+section.innerHTML=`<div class="play-layout"><div class="play-intro"><p class="eyebrow">A short break</p><h2 id="play-title">Up for a few<br><span class="serif">puzzles?</span></h2><p>Try a round of Signal Sense. There are six puzzles, and you can take as long as you like.</p><p class="game-premise">Stuck on one? Ask for a hint, or skip ahead and read the answer.</p><div class="game-facts"><span>6 puzzles per round</span><span>3 difficulty levels</span><span>No timer</span></div><div class="game-privacy">Play without an account. Your best score stays in this browser. This is a reasoning game, not a validated IQ test.</div></div><div class="game-shell"><div class="game-top"><span class="game-brand"><span class="game-brand-icon" aria-hidden="true"></span>Signal Sense</span><span id="game-top-status">Six puzzles, at your pace</span></div><div class="game-body" id="game-body" tabindex="-1"></div><div class="game-footnote"><span>Reasoning practice, not an IQ score.</span><span id="game-bottom-status">No timer. Take your time.</span></div></div></div>`;
+$('#approach').before(section);const body=$('#game-body');
+function pulse(){if(document.documentElement.dataset.motion==='reduced'||!body.animate)return;body.animate([{opacity:.4,transform:'translateY(5px)'},{opacity:1,transform:'translateY(0)'}],{duration:230,easing:'ease-out'});}
+function focusQuestion(){const heading=$('#game-question');if(!heading)return;heading.focus({preventScroll:true});const rect=heading.getBoundingClientRect();if(rect.top<$('.site-header').offsetHeight+16||rect.top>innerHeight-100)heading.scrollIntoView({behavior:'instant',block:'start'});}
+function formatTokens(tokens,className='question-tokens'){if(!tokens.length)return '';return `<div class="${className}" role="group" aria-label="Pattern to solve">${tokens.map(token=>`<span class="game-token ${token==='?'?'unknown':''} ${token.length>2?'long':''}" aria-label="${escape(accessible(token))}"><span aria-hidden="true">${escape(token)}</span></span>`).join('')}</div>`;}
+function intro(focus=false){
+$('#game-top-status').textContent='Six puzzles, at your pace';$('#game-bottom-status').textContent='No timer. Take your time.';
+body.innerHTML=`<h3 id="game-question" tabindex="-1">Ready to try?</h3><p>Choose a level below. Look for the simplest intended pattern. You’ll see the explanation after each answer.</p>${formatTokens(['2','6','12','20','?'],'game-example')}<fieldset class="level-selector"><legend>Choose your challenge</legend><div class="level-options">${Object.entries(levels).map(([key,words])=>`<label class="level-option"><input type="radio" name="difficulty" value="${key}" ${level===key?'checked':''}><span class="level-face">${words[0]}<small>${words[1]}</small></span></label>`).join('')}</div></fieldset><button type="button" id="game-start" class="game-primary game-start">Start a round <span aria-hidden="true">→</span></button><p class="game-result-note">100 points per correct answer. With a hint: 50. Take your time; speed does not affect your score. Skipped and incorrect answers score 0.</p><div class="game-round-meta"><span id="game-best">Best here: ${records[level]} / 600</span><button type="button" class="game-text-button" id="game-clear-records">Clear saved scores</button></div>`;
+$$('input[name=difficulty]',body).forEach(input=>input.addEventListener('change',()=>{level=input.value;$('#game-best').textContent=`Best here: ${records[level]} / 600`;}));$('#game-start').addEventListener('click',start);
+$('#game-clear-records').addEventListener('click',()=>{records={explorer:0,analyst:0,architect:0};try{localStorage.removeItem(storeKey);}catch{}$('#game-best').textContent='Saved scores cleared.';});if(focus)focusQuestion();pulse();}
+function start(){deck=shuffle(categories.flatMap(category=>shuffle(BANK.filter(q=>q.level===level&&q.category===category)).slice(0,2)));if(deck.map(q=>q.id).join(',')===previousIds)deck.reverse();previousIds=deck.map(q=>q.id).join(',');round=score=solved=streak=bestStreak=0;history=[];renderQuestion();}
+function renderQuestion(){selected=null;answered=false;hinted=false;const q=deck[round],options=shuffle(q.options);$('#game-top-status').textContent=`${levels[level][0]} · ${score} points`;$('#game-bottom-status').textContent='Take your time. There is no countdown.';const long=options.some(option=>option.length>26);
+body.innerHTML=`<div class="game-stage-label">Puzzle ${round+1} of 6 · ${q.category}</div><div class="game-progress" aria-hidden="true">${Array.from({length:6},(_,i)=>`<span class="${i<round?'done':i===round?'current':''}"></span>`).join('')}</div><h3 class="game-question" id="game-question" tabindex="-1">${escape(q.question)}</h3>${q.prompt?`<div class="game-prompt" style="white-space:pre-line">${escape(q.prompt)}</div>`:''}${formatTokens(q.tokens)}<fieldset class="game-answers ${long?'long-answers':''}" id="game-answers"><legend class="sr-only">Choose one answer</legend>${options.map((option,i)=>`<label class="game-answer"><input type="radio" name="answer" value="${i}" aria-label="${escape(accessible(option))}"><span>${escape(option)}</span><span class="answer-mark" aria-hidden="true"></span></label>`).join('')}</fieldset><div id="game-hint" class="game-hint" hidden></div><div id="game-feedback" aria-live="polite" aria-atomic="true"></div><div class="game-actions" id="game-actions"><button class="game-primary" type="button" id="game-check" disabled>Check answer <span aria-hidden="true">→</span></button><button class="game-text-button" id="game-hint-button" type="button">Get a hint</button><button class="game-text-button" id="game-skip" type="button">Skip</button></div><div class="game-round-meta"><span id="game-round-score">${score} points · ${solved} solved</span><span>Best streak: ${bestStreak}</span></div>`;
+$$('input[name=answer]',body).forEach(input=>input.addEventListener('change',()=>{if(answered)return;selected=options[Number(input.value)];$('#game-check').disabled=false;}));$('#game-check').addEventListener('click',()=>{if(selected!==null&&!answered)answer(false,options);});$('#game-skip').addEventListener('click',()=>{if(!answered)answer(true,options);});$('#game-hint-button').addEventListener('click',()=>{if(answered||hinted)return;hinted=true;const hint=$('#game-hint');hint.textContent=q.hint+' A correct answer is now worth 50 points.';hint.hidden=false;hint.setAttribute('role','status');$('#game-hint-button').disabled=true;$('#game-hint-button').textContent='Hint used';});focusQuestion();pulse();}
+function answer(skipped,options){if(answered)return;answered=true;const q=deck[round],correct=!skipped&&selected===q.answer,earned=correct?(hinted?50:100):0;score+=earned;if(correct){solved++;streak++;bestStreak=Math.max(streak,bestStreak);}else streak=0;history.push({q,selected:skipped?null:selected,correct,hinted,skipped,earned});
+$$('input[name=answer]',body).forEach(input=>{input.disabled=true;const value=options[Number(input.value)],label=input.closest('label');if(value===q.answer){label.classList.add('answer-correct');$('.answer-mark',label).textContent='✓ Correct';}else if(value===selected&&!skipped){label.classList.add('answer-wrong');$('.answer-mark',label).textContent='× Your pick';}});
+const feedback=$('#game-feedback');feedback.className='game-feedback'+(correct?'':' incorrect');feedback.innerHTML=`<strong>${correct?`Correct. +${earned} points`:skipped?'Skipped. Here is the rule.':'Not this time. Here is the rule.'}</strong><p><strong>Answer: ${escape(accessible(q.answer))}.</strong> ${escape(q.explanation)}</p>`;
+$('#game-actions').innerHTML=`<button class="game-primary" type="button" id="game-next">${round===5?'See my results':'Next puzzle'} <span aria-hidden="true">→</span></button>`;$('#game-next').addEventListener('click',()=>{if(round===5)results();else{round++;renderQuestion();}});$('#game-round-score').textContent=`${score} points · ${solved} solved`;$('#game-top-status').textContent=`${levels[level][0]} · ${score} points`;$('#game-next').focus({preventScroll:true});}
+function results(){const oldBest=records[level];records[level]=Math.max(records[level],score);let stored=false;try{localStorage.setItem(storeKey,JSON.stringify(records));stored=true;}catch{}
+const title=solved===6?'You got all six.':solved>=4?'Nicely done.':'That was a tricky set.';$('#game-top-status').textContent='Round complete';$('#game-bottom-status').textContent='Another round?';
+body.innerHTML=`<div class="game-stage-label">${levels[level][0]} · Round complete</div><h3 id="game-question" class="game-question" tabindex="-1" style="margin-top:14px">${title}</h3><div class="score-layout"><div class="score-dial" style="--score:${solved/6*100}" aria-label="${solved} of 6 puzzles solved"><strong>${solved}<small> / 6</small></strong></div><div class="score-summary"><strong>${score} <span class="mono">/ 600 points</span></strong><p>Best streak: ${bestStreak} · Hints used: ${history.filter(h=>h.hinted).length}</p><p>${score>oldBest?'A new best for this level.':`Best on this level: ${records[level]} / 600.`}</p></div></div><p>These points describe this round, not your intelligence. Review the explanations, then try another set of puzzles.</p><div class="game-actions"><button class="game-primary" type="button" id="game-replay">Play another round <span aria-hidden="true">↻</span></button><button class="game-text-button" type="button" id="game-levels">Change level</button><button class="game-text-button" type="button" id="game-copy">Copy my result</button></div><div id="copy-status" class="copy-status" role="status"></div><details class="game-review"><summary>Review all six answers</summary>${history.map((item,i)=>`<div class="review-item"><strong>${i+1}. ${escape(item.q.question)} ${item.correct?'✓':'·'}</strong><p>${item.q.tokens.length?escape(item.q.tokens.map(accessible).join(' · ')):escape(item.q.prompt)}</p><p>Your answer: ${item.skipped?'Skipped':escape(accessible(item.selected))}. Correct answer: ${escape(accessible(item.q.answer))}. ${item.earned} points.</p><p>${escape(item.q.explanation)}</p></div>`).join('')}</details><p class="game-result-note">${stored?'Best scores are stored only in this browser. Clear them from the challenge start screen.':'Browser storage is unavailable. Your score is shown here but will not persist after this page closes.'} This is a reasoning game, not a validated IQ assessment or percentile ranking.</p>`;
+$('#game-replay').addEventListener('click',start);$('#game-levels').addEventListener('click',()=>intro(true));$('#game-copy').addEventListener('click',async()=>{const text=`I solved ${solved}/6 puzzles in Signal Sense (${levels[level][0]}) and scored ${score}/600. A reasoning game, not an IQ test. Try it: https://akinyede.github.io/S-Akinyede/lab.html`,status=$('#copy-status');try{if(!navigator.clipboard?.writeText)throw new Error('Clipboard unavailable');await navigator.clipboard.writeText(text);status.textContent='Result copied. Share it wherever you like.';}catch{status.textContent='Select and copy your result below:';const field=document.createElement('textarea');field.readOnly=true;field.className='score-fallback';field.setAttribute('aria-label','Result to copy');field.value=text;status.append(field);field.focus();field.select();}});focusQuestion();pulse();}
+intro();if(location.hash==='#play')requestAnimationFrame(()=>section.scrollIntoView({behavior:'instant',block:'start'}));document.documentElement.dataset.interactive='ready';
 })();
